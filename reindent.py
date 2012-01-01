@@ -162,8 +162,7 @@ class Reindenter:
         # File lines, rstripped & tab-expanded.  Dummy at start is so
         # that we can use tokenize's 1-based line numbering easily.
         # Note that a line is all-blank iff it's "\n".
-        self.lines = [_rstrip(line).expandtabs() + "\n"
-                      for line in self.raw]
+        self.lines = [_rstrip(line) + "\n" for line in self.raw]
         self.lines.insert(0, None)
         self.index = 1  # index into self.lines of next line
 
@@ -175,6 +174,9 @@ class Reindenter:
 
     def run(self):
         tokenize.tokenize(self.getline, self.tokeneater)
+        for idx in range(1, len(self.lines)):
+            self.lines[idx] = self.lines[idx].expandtabs()
+
         # Remove trailing empty lines.
         lines = self.lines
         while lines and lines[-1] == "\n":
@@ -255,12 +257,22 @@ class Reindenter:
         return line
 
     # Line-eater for tokenize.
-    def tokeneater(self, type, token, (sline, scol), end, line,
+    def tokeneater(self, type, token, (sline, scol), (eline, ecol), line,
                    INDENT=tokenize.INDENT,
                    DEDENT=tokenize.DEDENT,
                    NEWLINE=tokenize.NEWLINE,
                    COMMENT=tokenize.COMMENT,
-                   NL=tokenize.NL):
+                   NL=tokenize.NL,
+                   STRING=tokenize.STRING):
+
+        if type == STRING:
+            for lidx in range(sline, eline + 1):
+                line = self.lines[lidx]
+                lscol = (lidx == sline) and scol or 0
+                lecol = (lidx == eline) and ecol or len(line)
+                self.lines[lidx] = (
+                    line[:lscol] + line[lscol:lecol].replace('\t', '\\t') +
+                    line[lecol:])
 
         if type == NEWLINE:
             # A program statement, or ENDMARKER, will eventually follow,
